@@ -5,6 +5,19 @@ import { Text } from "../../components/atoms/text/Text.tsx";
 import { Loader } from "../../components/organizms/loading/loaderCircle/Loader.tsx"; // Импортируем css-модуль для сетки и карточек
 import s from "./Schedule.module.css";
 
+const LESSON_TIMING: Record<string, string> = {
+  "1": "8:00 - 8:45",
+  "2": "9:00 - 9:45",
+  "3": "10:00 - 10:45",
+  "4": "11:00 - 11:45",
+  "5": "12:00 - 12:45",
+  "6": "13:00 - 13:45",
+};
+
+const getLessonTime = (id: string) => {
+  return LESSON_TIMING[id || "00:00 - 00:00"];
+};
+
 const Schedule = observer(() => {
   const { termSelectorProps, schedule, isLoading, error } =
     useStudentSchedule("4_A");
@@ -51,12 +64,20 @@ const Schedule = observer(() => {
                     >
                       {name}
                     </Text>
-                    <Text
-                      as="small"
-                      color="var(--text-secondary)"
-                    >
-                      Кабинет: {room}
-                    </Text>
+                    <div className={s.lessonRoomTime}>
+                      <Text
+                        as="small"
+                        color="var(--text-secondary)"
+                      >
+                        Кабинет: {room}
+                      </Text>
+                      <Text
+                        as="small"
+                        color="var(--text-secondary)"
+                      >
+                        {getLessonTime(id)}
+                      </Text>
+                    </div>
                   </div>
                 </div>
               );

@@ -53,8 +53,18 @@ export const SubjectDetails: FC = observer(() => {
       return;
     toast(
       (t) => (
-        <Text color="var(--text-main)">
-          Оценка <b>{grade.value}</b> удалена.
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+            alignItems: "flex-start",
+          }}
+        >
+          <Text color="var(--text-main)">
+            Оценка <b>{grade.value}</b> удалена.
+          </Text>
+
           <Button
             onClick={async () => {
               if (await userStore.restoreGrade(grade))
@@ -63,7 +73,7 @@ export const SubjectDetails: FC = observer(() => {
           >
             Отменить
           </Button>
-        </Text>
+        </div>
       ),
       { duration: 6000, icon: "🗑️" },
     );

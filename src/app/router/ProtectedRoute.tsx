@@ -8,13 +8,16 @@ import { userStore } from "../../store/UserStore.tsx";
 import { observer } from "mobx-react-lite";
 import { LoaderPotter } from "../../components/organizms/loading/LoaderPotter.tsx";
 import { PATHS } from "./PATHS.ts";
+import { Button } from "../../components/atoms/button/Button.tsx";
+import { Text } from "../../components/atoms/text/Text.tsx";
 
 export const ProtectedRoute: FC = observer(() => {
   const location = useLocation();
-  const { isLoading, user } = userStore;
+  const { isAuthReady, isLoading, profileError, user } =
+    userStore;
 
-  if (isLoading) {
-    return <LoaderPotter text={"Шалость удалась"} />;
+  if (!isAuthReady) {
+    return <LoaderPotter text={"Восстанавливаем сессию"} />;
   }
 
   if (!user) {
@@ -24,6 +27,46 @@ export const ProtectedRoute: FC = observer(() => {
         state={{ from: location }}
         replace
       />
+    );
+  }
+
+  if (isLoading) {
+    return <LoaderPotter text={"Шалость удалась"} />;
+  }
+
+  if (profileError) {
+    return (
+      <div
+        role="alert"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          margin: "50px auto",
+          padding: 18,
+          maxWidth: 490,
+          width: "100%",
+        }}
+      >
+        <Text
+          as={"p"}
+          size={"xxl"}
+          color={"var(--text-secondary)"}
+          style={{
+            marginBottom: 30,
+          }}
+        >
+          {profileError}
+        </Text>
+        <Button
+          onClick={() => void userStore.retryProfile()}
+        >
+          Повторить попытку
+        </Button>
+        <Button onClick={() => void userStore.logout()}>
+          Выйти
+        </Button>
+      </div>
     );
   }
 

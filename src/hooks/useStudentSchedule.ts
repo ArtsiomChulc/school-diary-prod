@@ -1,6 +1,7 @@
+import { userStore } from "../store/UserStore.tsx";
 import { useState, useEffect } from "react";
-import { scheduleStore } from "../store/ScheduleStore"; // ваш путь к стору
-import type { DayOfWeek } from "../services/ScheduleService";
+import { scheduleStore } from "../store/ScheduleStore.ts";
+import type { DayOfWeek } from "../services/ScheduleService.ts";
 
 const DAYS_TRANSLATIONS: Record<DayOfWeek, string> = {
   monday: "ПН",
@@ -11,23 +12,29 @@ const DAYS_TRANSLATIONS: Record<DayOfWeek, string> = {
   saturday: "СБ",
 };
 
-export const useStudentSchedule = (
-  classId: string = "4_A",
-) => {
+export const useStudentSchedule = () => {
+  const classId = userStore.profile?.classId;
   const [selectedDay, setSelectedDay] =
     useState<DayOfWeek>("monday");
 
   useEffect(() => {
-    scheduleStore
-      .fetchSchedule(classId, selectedDay)
-      .then();
+    if (classId)
+      void scheduleStore.fetchSchedule(
+        classId,
+        selectedDay,
+      );
+    else scheduleStore.reset();
+    return () => scheduleStore.reset();
   }, [classId, selectedDay]);
+  const matchesSelection =
+    scheduleStore.classId === classId &&
+    scheduleStore.dayId === selectedDay;
 
   const termSelectorProps = {
     terms: (
       Object.keys(DAYS_TRANSLATIONS) as DayOfWeek[]
     ).map((day) => ({
-      key: day, // Используем "key" вместо "id"
+      key: day,
       label: DAYS_TRANSLATIONS[day],
     })),
     selectedTerm: selectedDay,
@@ -37,8 +44,20 @@ export const useStudentSchedule = (
 
   return {
     termSelectorProps,
-    schedule: scheduleStore.currentSchedule,
-    isLoading: scheduleStore.isLoading,
-    error: scheduleStore.error,
+    schedule: matchesSelection
+      ? scheduleStore.currentSchedule
+      : null,
+    isLoading:
+      !!classId &&
+      (!matchesSelection || scheduleStore.isLoading),
+    error: matchesSelection ? scheduleStore.error : null,
+    classId,
+    retry: () => {
+      if (classId)
+        void scheduleStore.fetchSchedule(
+          classId,
+          selectedDay,
+        );
+    },
   };
 };

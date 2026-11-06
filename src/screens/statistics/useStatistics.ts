@@ -25,28 +25,29 @@ export const useStatistics = () => {
   const { selectedTerm } = termSelector;
   const {
     profile,
-    subjects: studentSubjects,
+    subjectMarks: studentSubjects,
     isEmpty,
-  } = useStudentSubjects();
+  } = useStudentSubjects(selectedTerm);
 
   const subjects: SubjectStatistics[] = studentSubjects.map(
     (subject) => {
-      const termData = subject[selectedTerm];
-      const stats = calculateSubjectStats(termData?.marks);
+      const stats = calculateSubjectStats(
+        subject.currentMarks.map((grade) => grade.value),
+      );
       return {
-        id: subject.id,
-        name: subject.name,
+        id: subject.subjectId,
+        name: subject.subjectName,
         ...stats,
         badgeClass: getBadgeClass(stats.average),
-        finalMark: termData?.finalMark,
+        finalMark: subject.finalMark?.value,
       };
     },
   );
 
   return {
     studentName: profile?.name ?? "",
-    grades: studentSubjects.flatMap(
-      (subject) => subject[selectedTerm]?.marks ?? [],
+    grades: studentSubjects.flatMap((subject) =>
+      subject.currentMarks.map((grade) => grade.value),
     ),
     isEmpty,
     subjects,

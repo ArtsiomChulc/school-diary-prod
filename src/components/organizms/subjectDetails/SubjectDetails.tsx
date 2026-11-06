@@ -1,111 +1,85 @@
 import { type FC, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { userStore } from "../../../store/UserStore.tsx";
+import { useTermSelection } from "../../../hooks/useTermSelection.ts";
+import { TermSelector } from "../../molecules/termSelector/TermSelector.tsx";
+import {
+  type IGrade,
+  userStore,
+} from "../../../store/UserStore.tsx";
 import toast from "react-hot-toast";
-import { TrashIcon, ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon, TrashIcon } from "lucide-react";
 import { Text } from "../../atoms/text/Text.tsx";
 import { Button } from "../../atoms/button/Button.tsx";
+import { useNavigate, useParams } from "react-router";
 import s from "./SubjectDetails.module.css";
-import { useParams, useNavigate } from "react-router";
 
 export const SubjectDetails: FC = observer(() => {
   const navigate = useNavigate();
   const { subjectId } = useParams<{ subjectId: string }>();
 
-  const { profile, isLoading } = userStore;
-
-  const [selectedTerm, setSelectedTerm] = useState<
-    "term_1" | "term_2" | "term_3" | "term_4"
-  >("term_1");
-
+  const { profile, isSavingGrade } = userStore;
+  const termSelector = useTermSelection();
+  const { selectedTerm } = termSelector;
   const [showMarkSelector, setShowMarkSelector] =
     useState(false);
+  const subject = subjectId
+    ? userStore.currentStudentSubjects?.[subjectId]
+    : null;
+  const currentTermData = userStore
+    .getSubjectMarks(selectedTerm)
+    .find((item) => item.subjectId === subjectId);
+  if (!profile) return <Text>Ученик не выбран</Text>;
+  if (!subject || !subjectId)
+    return <Text>Предмет не найден в журнале</Text>;
 
-  if (!subjectId || !profile || !profile.subjects)
-    return null;
-
-  const subject = profile.subjects[subjectId];
-  if (!subject)
-    return (
-      <div className={s.notFound}>
-        Предмет не найден в журнале
-      </div>
-    );
-
-  const currentTermData = subject[selectedTerm];
-
-  const handleAddMark = async (mark: number) => {
-    await userStore.addMarkAndSave(
-      profile.uid,
-      subjectId,
-      selectedTerm,
-      mark,
-    );
-    setShowMarkSelector(false);
-  };
-
-  const handleDeleteMark = (index: number) => {
-    if (!currentTermData || !currentTermData.marks) return;
-
-    const deletedMark = currentTermData.marks[index];
-
-    userStore
-      .deleteMarkAndSave(
+  const handleAddMark = async (value: number) => {
+    if (
+      await userStore.addMarkAndSave(
         profile.uid,
         subjectId,
         selectedTerm,
-        index,
+        value,
       )
-      .then();
-
+    )
+      setShowMarkSelector(false);
+  };
+  const handleDeleteMark = async (grade: IGrade) => {
+    if (
+      !(await userStore.deleteMarkAndSave(
+        profile.uid,
+        grade.id,
+      ))
+    )
+      return;
     toast(
       (t) => (
-        <Text color={"var(--text-main)"}>
-          Оценка <b>{deletedMark}</b> удалена.
+        <Text color="var(--text-main)">
+          Оценка <b>{grade.value}</b> удалена.
           <Button
             onClick={async () => {
-              await userStore.addMarkAndSave(
-                profile.uid,
-                subjectId,
-                selectedTerm,
-                deletedMark,
-              );
-              toast.dismiss(t.id);
-              toast.success("Удаление отменено");
-            }}
-            style={{
-              marginLeft: "12px",
-              backgroundColor: "#fff",
-              border: "1px solid #cbd5e0",
-              padding: "2px 8px",
-              borderRadius: "4px",
-              cursor: "pointer",
-              color: "#3182ce",
-              fontWeight: "bold",
+              if (await userStore.restoreGrade(grade))
+                toast.dismiss(t.id);
             }}
           >
             Отменить
           </Button>
         </Text>
       ),
-      {
-        duration: 6000,
-        icon: "🗑️",
-      },
+      { duration: 6000, icon: "🗑️" },
     );
   };
 
   return (
     <div className={s.container}>
       <Button
-        onClick={() => navigate("/subjects")}
+        onClick={() => navigate("/")}
         className={s.backBtn}
       >
         <ArrowLeftIcon
           size={16}
           style={{ marginRight: "6px" }}
         />
-        Назад в дневник
+        На главную
       </Button>
 
       <Text
@@ -120,49 +94,62 @@ export const SubjectDetails: FC = observer(() => {
         {subject.name}
       </Text>
 
-      <div className={s.tabs}>
-        {(
-          ["term_1", "term_2", "term_3", "term_4"] as const
-        ).map((key) => (
-          <Button
-            key={key}
-            onClick={() => {
-              setSelectedTerm(key);
-              setShowMarkSelector(false);
-            }}
-            className={`${s.tabBtn} ${selectedTerm === key ? s.tabBtnActive : s.tabBtnInactive}`}
-          >
-            {key === "term_1"
-              ? "I ч."
-              : key === "term_2"
-                ? "II ч."
-                : key === "term_3"
-                  ? "III ч."
-                  : "IV ч."}
-          </Button>
-        ))}
-      </div>
+      <TermSelector
+        {...termSelector}
+        classes={{
+          tabs: s.tabs,
+          tabBtn: s.tabBtn,
+          tabBtnActive: s.tabBtnActive,
+          tabBtnInactive: s.tabBtnInactive,
+        }}
+      />
 
       <div className={s.detailsCard}>
         <Text as={"h3"} color={"var(--text-main)"}>
           Текущие оценки:
         </Text>
         <div className={s.marksContainer}>
-          {currentTermData?.marks &&
-          currentTermData.marks.length > 0 ? (
-            currentTermData.marks.map((mark, idx) => (
-              <div key={idx} className={s.markBadge}>
-                <Text as={"span"}>{mark}</Text>
-                <Button
-                  onClick={() => handleDeleteMark(idx)}
-                  disabled={isLoading}
-                  className={s.deleteMarkBtn}
-                  title="Удалить оценку"
-                >
-                  <TrashIcon size={18} />
-                </Button>
-              </div>
-            ))
+          {currentTermData?.currentMarks &&
+          currentTermData.currentMarks.length > 0 ? (
+            currentTermData.currentMarks.map((mark) => {
+              const jsDate = mark.createdAt.toDate();
+
+              const formatted = jsDate.toLocaleDateString(
+                "ru-BY",
+                {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                },
+              );
+              return (
+                <div className={s.markBadgeContainer}>
+                  <div
+                    key={mark.id}
+                    className={s.markBadge}
+                    title={mark.comment}
+                  >
+                    <Text as={"span"}>{mark.value}</Text>
+                    <Button
+                      onClick={() =>
+                        void handleDeleteMark(mark)
+                      }
+                      disabled={
+                        isSavingGrade ||
+                        termSelector.isSelectionCompleted
+                      }
+                      className={`${s.deleteMarkBtn}${termSelector.isSelectionCompleted || isSavingGrade ? s.disabled : ""}`}
+                      title="Удалить оценку"
+                    >
+                      <TrashIcon size={18} />
+                    </Button>
+                  </div>
+                  <Text as={"span"} size={"xxs"}>
+                    {formatted}
+                  </Text>
+                </div>
+              );
+            })
           ) : (
             <Text
               className={s.emptyMarks}
@@ -183,7 +170,8 @@ export const SubjectDetails: FC = observer(() => {
             color={"var(--bg-button-form)"}
             style={{ fontSize: "1.25rem", fontWeight: 600 }}
           >
-            {currentTermData?.finalMark ?? "не выставлена"}
+            {currentTermData?.finalMark?.value ??
+              "не выставлена"}
           </Text>
         </div>
 
@@ -191,7 +179,12 @@ export const SubjectDetails: FC = observer(() => {
           {!showMarkSelector ? (
             <Button
               onClick={() => setShowMarkSelector(true)}
-              disabled={isLoading}
+              disabled={
+                termSelector.isSelectionCompleted ||
+                isSavingGrade ||
+                !selectedTerm ||
+                !userStore.currentYearId
+              }
               className={s.addBtn}
             >
               + Добавить оценку
@@ -205,19 +198,27 @@ export const SubjectDetails: FC = observer(() => {
               >
                 Выберите балл:
               </Text>
-              <div className={s.digitsGrid}>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(
-                  (num) => (
-                    <Button
-                      key={num}
-                      onClick={() => handleAddMark(num)}
-                      className={s.digitBtn}
-                    >
-                      {num}
-                    </Button>
-                  ),
-                )}
-              </div>
+              {!termSelector.isSelectionCompleted && (
+                <div className={s.digitsGrid}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(
+                    (num) => (
+                      <Button
+                        key={num}
+                        onClick={() =>
+                          void handleAddMark(num)
+                        }
+                        disabled={
+                          isSavingGrade ||
+                          termSelector.isSelectionCompleted
+                        }
+                        className={s.digitBtn}
+                      >
+                        {num}
+                      </Button>
+                    ),
+                  )}
+                </div>
+              )}
               <Button
                 onClick={() => setShowMarkSelector(false)}
                 className={s.cancelBtn}

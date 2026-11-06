@@ -5,7 +5,7 @@ import { LockOpen, Mail } from "lucide-react";
 import { Button } from "../../components/atoms/button/Button.tsx";
 import { type SyntheticEvent, useState } from "react";
 import { userStore } from "../../store/UserStore.tsx";
-import { useLocation, useNavigate } from "react-router";
+import { Navigate, useLocation } from "react-router";
 import { observer } from "mobx-react-lite";
 import { LoaderPotter } from "../../components/organizms/loading/LoaderPotter.tsx";
 import s from "./SignIn.module.css";
@@ -14,12 +14,17 @@ export const SignIn = observer(() => {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
 
-  const navigate = useNavigate();
   const location = useLocation();
 
   const fromPage = location.state?.from?.pathname || "/";
 
-  const { login, authError, isLoading } = userStore;
+  const {
+    login,
+    authError,
+    isAuthReady,
+    isSigningIn,
+    user,
+  } = userStore;
 
   const handleSubmit = async (e: SyntheticEvent) => {
     e.preventDefault();
@@ -29,11 +34,14 @@ export const SignIn = observer(() => {
     }
 
     await login(email, password);
-    navigate(fromPage, { replace: true });
   };
 
-  if (isLoading) {
-    return <LoaderPotter text={"Загружаем профиль"} />;
+  if (!isAuthReady) {
+    return <LoaderPotter text={"Восстанавливаем сессию"} />;
+  }
+
+  if (user) {
+    return <Navigate to={fromPage} replace />;
   }
 
   return (
@@ -69,11 +77,11 @@ export const SignIn = observer(() => {
             placeholder="Введи свой  пароль"
             onChange={(e) => setPassword(e.target.value)}
             icon={<LockOpen size={20} strokeWidth={1.5} />}
-            disabled={isLoading}
+            disabled={isSigningIn}
             required
           />
-          <Button type={"submit"} disabled={isLoading}>
-            {isLoading ? "Вход..." : "Войти"}
+          <Button type={"submit"} disabled={isSigningIn}>
+            {isSigningIn ? "Вход..." : "Войти"}
           </Button>
         </form>
       </FormContainer>

@@ -16,8 +16,8 @@ import { NavLink } from "react-router";
 import { observer } from "mobx-react-lite";
 import useWindowWidth from "../../../hooks/useWindowSize.ts";
 import { Hamburger } from "../../molecules/hamburger/Hamburger.tsx";
-import s from "./Header.module.css";
 import { PATHS } from "../../../app/router/PATHS.ts";
+import s from "./Header.module.css";
 
 interface Props {
   handleLogout: () => void;
@@ -115,8 +115,18 @@ export const Header: FC<Props> = observer(
         {!mobile && (
           <NickNameIco
             fullName={currentUserProfile?.name}
-            role={currentUserProfile?.role}
-            email={currentUserProfile?.email}
+            role={
+              currentUserProfile &&
+              "role" in currentUserProfile
+                ? currentUserProfile.role
+                : "student"
+            }
+            email={
+              currentUserProfile &&
+              "email" in currentUserProfile
+                ? currentUserProfile.email
+                : (userStore.user?.email ?? undefined)
+            }
           />
         )}
 
@@ -133,7 +143,12 @@ export const Header: FC<Props> = observer(
               <div className={s.sidebar_profile}>
                 <NickNameIco
                   fullName={currentUserProfile?.name}
-                  role={currentUserProfile?.role}
+                  role={
+                    currentUserProfile &&
+                    "role" in currentUserProfile
+                      ? currentUserProfile.role
+                      : "student"
+                  }
                 />
                 <Text
                   as="p"
@@ -141,7 +156,10 @@ export const Header: FC<Props> = observer(
                   color="var(--text-secondary)"
                   style={{ marginTop: "4px" }}
                 >
-                  {currentUserProfile?.email}
+                  {currentUserProfile &&
+                  "email" in currentUserProfile
+                    ? currentUserProfile.email
+                    : (userStore.user?.email ?? undefined)}
                 </Text>
               </div>
 

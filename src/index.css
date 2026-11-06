@@ -5,6 +5,7 @@
 :root, [data-theme="light"] {
   --text-main: #1c1412;
   --text-secondary: #62534d;
+  --text-primary: #1a2130;
   --text-color-btn: #faf9f6;
 
   --badge-high-bg: #c2e7cd;
@@ -24,6 +25,14 @@
   --bg-input: #fdfbf8;
   --form-bg: rgb(253 251 248 / 0.95);
   --bg-footer: rgb(240 235 228 / 0.6);
+  --background-page: #f8f9fa;
+  --background-card: #ffffff;
+  --background-danger-light: #fef2f2;
+
+  --status-danger: #ef4444;
+
+  --brand-primary: #3b82f6;
+  --brand-primary-hover: #2563eb;
 
   --border-color: #e2d8ce;
   --border: #cdbeb0;
@@ -64,6 +73,7 @@
   --text-main: #f5f2eb;
   --text-secondary: #d0c3b9;
   --text-color-btn: #15100e;
+  --text-primary: #f8fafc;
 
   --badge-high-bg: #0f3d1b;
   --badge-high-text: #a7f3d0;
@@ -81,6 +91,14 @@
   --form-bg: #241b17;
   --bg-card: #2a201b;
   --bg-footer: rgb(36 27 23 / 0.6);
+  --background-page: #0f172a;
+  --background-card: #1e293b;
+  --background-danger-light: rgba(248, 113, 113, 0.1);
+
+  --status-danger: #f87171;
+
+  --brand-primary: #3b82f6;
+  --brand-primary-hover: #60a5fa;
 
   --border-color: #44352d;
   --bg-input: #2c211c;

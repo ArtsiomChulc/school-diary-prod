@@ -2,7 +2,8 @@ import { useStudentSchedule } from "../../hooks/useStudentSchedule.ts";
 import { observer } from "mobx-react-lite";
 import { TermSelector } from "../../components/molecules/termSelector/TermSelector.tsx";
 import { Text } from "../../components/atoms/text/Text.tsx";
-import { Loader } from "../../components/organizms/loading/loaderCircle/Loader.tsx"; // Импортируем css-модуль для сетки и карточек
+import { Loader } from "../../components/organizms/loading/loaderCircle/Loader.tsx";
+import { Button } from "../../components/atoms/button/Button.tsx";
 import s from "./Schedule.module.css";
 
 const LESSON_TIMING: Record<string, string> = {
@@ -15,25 +16,38 @@ const LESSON_TIMING: Record<string, string> = {
 };
 
 const getLessonTime = (id: string) => {
-  return LESSON_TIMING[id || "00:00 - 00:00"];
+  return LESSON_TIMING[id] ?? "Время не указано";
 };
 
 const Schedule = observer(() => {
-  const { termSelectorProps, schedule, isLoading, error } =
-    useStudentSchedule("4_A");
+  const {
+    termSelectorProps,
+    schedule,
+    isLoading,
+    error,
+    classId,
+    retry,
+  } = useStudentSchedule();
+
+  if (!classId) return <Text>Класс ученика не указан</Text>;
 
   if (isLoading) {
     return <Loader size={50} centered />;
   }
 
   if (error) {
-    return <div className={s.errorState}>{error}</div>;
+    return (
+      <div role="alert" className={s.errorState}>
+        <span>{error}</span>
+        <Button onClick={retry}>Повторить попытку</Button>
+      </div>
+    );
   }
 
   return (
     <div className={s.scheduleWrapper}>
       <Text as="h2" weight={600} className={s.title}>
-        Расписание уроков
+        Расписание уроков {classId}
       </Text>
 
       <TermSelector
@@ -88,6 +102,9 @@ const Schedule = observer(() => {
           </div>
         )}
       </div>
+      {/*<button onClick={() => scheduleStore.seedMockData()}>*/}
+      {/*  Add lessons*/}
+      {/*</button>*/}
     </div>
   );
 });

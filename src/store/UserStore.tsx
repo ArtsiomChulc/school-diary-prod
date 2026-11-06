@@ -4,7 +4,10 @@ import {
   doc,
   getDoc,
   getDocs,
-  updateDoc,
+  query,
+  where,
+  Timestamp,
+  writeBatch,
 } from "firebase/firestore";
 import {
   onAuthStateChanged,
@@ -14,46 +17,141 @@ import {
 import { auth, db } from "../../firebase.ts";
 import toast from "react-hot-toast";
 
-export interface ITermMarks {
-  marks: number[];
-  finalMark?: number | null;
+import { firestoreRequest as readFirestore } from "../utils/firestoreRequest.ts";
+
+export interface IAcademicYear {
+  id: string; // Например, "year_2026_2027"
+  name: string; // "2026/2027 учебный год"
+  startDate: Timestamp; // Дата начала учебного года
+  endDate: Timestamp; // Дата окончания учебного года
+  isCompleted: boolean; // Флаг завершения учебного года
 }
 
+// Учебная четверть (Подколлекция "academic_years/[yearId]/terms")
+export interface ITerm {
+  id: string; // "term_1", "term_2", "term_3", "term_4"
+  name: string; // "1 четверть"
+  startDate: Timestamp; // Дата начала четверти
+  endDate: Timestamp; // Дата окончания каникул/четверти
+  isCompleted: boolean; // Флаг завершения/блокировки четверти
+}
+
+// Предмет (Коллекция "subjects")
 export interface ISubject {
-  id: string;
-  name: string;
-  term_1?: ITermMarks;
-  term_2?: ITermMarks;
-  term_3?: ITermMarks;
-  term_4?: ITermMarks;
+  id: string; // "sub_math", "sub_rus"
+  name: string; // "Математика", "Русский язык"
 }
 
+// ==========================================
+// 2. ПОЛЬЗОВАТЕЛИ И ПРОФИЛИ
+// ==========================================
+
+// Профиль ученика (Коллекция "students")
 export interface IStudentProfile {
-  uid: string;
-  name: string;
-  email: string;
-  role: string;
-  class?: string;
-  createdAt: Date;
-  subjects?: Record<string, ISubject>;
+  uid: string; // Идентификатор, равный Auth UID
+  name: string; // "Иванов Алексей Иванович"
+  classId: string; // "4_A"
+  parents: string[]; // Массив ID родителей: ["parent_id_1", "parent_id_2"]
   telegramChatIds: string | string[];
+  BOT_TOKEN: string;
 }
 
+// Профиль родителя (Коллекция "users_parents")
 export interface IParentProfile {
-  uid: string;
-  name: string;
-  email: string;
-  role: string;
-  createdAt: Date;
-  children: string[];
+  uid: string; // Идентификатор, равный Auth UID
+  name: string; // "Иванов Иван Иванович"
+  email: string; // "parent1@example.com"
+  role: string; // Фиксированная роль
+  children: string[]; // Массив ID детей учеников: ["student_id_1", "student_id_2"]
 }
 
-class UserStore {
+// ==========================================
+// 3. ЖУРНАЛ ОЦЕНОК (Коллекция "grades")
+// ==========================================
+
+// Одиночная оценка (Документ в коллекции "grades")
+export interface IGrade {
+  id: string; // Уникальный ID документа оценки
+  studentId: string; // ID ученика
+  yearId: string; // ID учебного года
+  termId: string; // ID четверти
+  subjectId: string; // ID предмета
+  value: number; // Оценка от 1 до 10
+  comment?: string; // Комментарий ("Ответ у доски", "Контрольная")
+  createdAt: Timestamp; // Дата постановки оценки
+  isFinal: boolean; // true — если это итоговая четвертная оценка, false — текущая
+}
+
+// ==========================================
+// 4. ДЛЯ ИНТЕРФЕЙСА (Интегрированные данные для рендера табеля)
+// ==========================================
+
+// Структурированные оценки по одному предмету для вывода в строку
+export interface ISubjectMarksUI {
+  subjectId: string;
+  subjectName: string;
+  currentMarks: IGrade[]; // Только текущие оценки (isFinal: false)
+  finalMark: IGrade | null; // Четвертная оценка (isFinal: true)
+}
+
+export type TermKey =
+  "term_1" | "term_2" | "term_3" | "term_4";
+
+export class UserStore {
   user: FirebaseUser | null = null;
-  currentUserProfile:
+  public currentUserProfile:
     IStudentProfile | IParentProfile | null = null;
-  profile: IStudentProfile | null = null;
-  isLoading: boolean = true;
+  private studentProfile: IStudentProfile | null = null;
+  public academicYears: IAcademicYear[] = [];
+  public currentYearId: string | null = null;
+  public currentTerms: ITerm[] = [];
+
+  getSubjectMarks(termId: string): ISubjectMarksUI[] {
+    return Object.values(
+      this.currentStudentSubjects ?? {},
+    ).map((subject) => {
+      const grades = this.currentGrades.filter(
+        (grade) =>
+          grade.studentId === this.studentProfile?.uid &&
+          grade.subjectId === subject.id &&
+          grade.termId === termId &&
+          grade.yearId === this.currentYearId,
+      );
+      return {
+        subjectId: subject.id,
+        subjectName: subject.name,
+        currentMarks: grades.filter(
+          (grade) => !grade.isFinal,
+        ),
+        finalMark:
+          grades.find((grade) => grade.isFinal) ?? null,
+      };
+    });
+  }
+
+  get profile(): IStudentProfile | null {
+    return this.studentProfile;
+  }
+
+  private clearStudentData() {
+    this.studentProfile = null;
+    this.currentGrades = [];
+    this.currentStudentSubjects = null;
+    this.academicYears = [];
+    this.currentYearId = null;
+    this.currentTerms = [];
+  }
+  public isLoading: boolean = true;
+  public isAuthReady = false;
+  public isSigningIn = false;
+  public isSavingGrade = false;
+  private studentRequestId = 0;
+  public profileError: string | null = null;
+  public currentGrades: IGrade[] = [];
+  public currentStudentSubjects: Record<
+    string,
+    ISubject
+  > | null = null;
   authError: string | null = null;
 
   constructor() {
@@ -62,63 +160,90 @@ class UserStore {
   }
 
   private initAuthListener() {
-    onAuthStateChanged(auth, async (currentUser) => {
+    onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         runInAction(() => {
+          this.isAuthReady = true;
+          this.profileError = null;
+          this.clearStudentData();
+          this.currentUserProfile = null;
           this.user = currentUser;
           this.isLoading = true;
         });
 
-        await this.fetchUserProfile(currentUser.uid);
+        void this.fetchUserProfile(currentUser.uid);
       } else {
         runInAction(() => {
+          this.isAuthReady = true;
+          this.profileError = null;
           this.user = null;
           this.currentUserProfile = null;
-          this.profile = null;
+          this.clearStudentData();
           this.isLoading = false;
         });
       }
     });
   }
 
-  private async fetchUserProfile(uid: string) {
-    try {
-      const userDocRef = doc(db, "users", uid);
-      const userDocSnap = await getDoc(userDocRef);
+  retryProfile = async () => {
+    if (this.user)
+      await this.fetchUserProfile(this.user.uid);
+  };
 
-      if (userDocSnap.exists()) {
-        const userData =
-          userDocSnap.data() as IStudentProfile;
-        const subjectsMap =
-          await this.fetchStudentSubjects(uid);
+  private async fetchUserProfile(
+    uid: string,
+  ): Promise<void> {
+    try {
+      // Включаем индикатор загрузки перед началом асинхронных операций
+      runInAction(() => {
+        this.isLoading = true;
+        this.profileError = null;
+      });
+
+      // 1. Ищем пользователя в коллекции учеников (students)
+      const studentDocRef = doc(db, "students", uid);
+      const studentDocSnap = await readFirestore(
+        getDoc(studentDocRef),
+      );
+      if (this.user?.uid !== uid) return;
+
+      if (studentDocSnap.exists()) {
+        // Извлекаем данные через .data() и приводим к типу
+        const studentData = {
+          ...studentDocSnap.data(),
+          uid: studentDocSnap.id,
+        } as IStudentProfile;
 
         runInAction(() => {
-          this.currentUserProfile = {
-            ...userData,
-            subjects: subjectsMap,
-          };
-          this.profile = this
-            .currentUserProfile as IStudentProfile;
-          this.isLoading = false;
+          this.currentUserProfile = studentData;
         });
+        await this.loadStudentProfile(uid);
         return;
       }
 
-      const parentDocRef = doc(db, "parents", uid);
-      const parentDocSnap = await getDoc(parentDocRef);
+      // 2. Если не нашли среди учеников, ищем в коллекции родителей (users_parents)
+      const parentDocRef = doc(db, "users_parents", uid);
+      const parentDocSnap = await readFirestore(
+        getDoc(parentDocRef),
+      );
+      if (this.user?.uid !== uid) return;
 
       if (parentDocSnap.exists()) {
-        const parentData =
-          parentDocSnap.data() as IParentProfile;
+        const parentData = {
+          ...parentDocSnap.data(),
+          uid: parentDocSnap.id,
+        } as IParentProfile;
 
         runInAction(() => {
           this.currentUserProfile = parentData;
         });
 
+        // В Firestore роли связаны через обычный массив строк ["student_id_1", "student_id_2"]
         if (
           parentData.children &&
           parentData.children.length > 0
         ) {
+          // Автоматически загружаем профиль первого ребенка (индекс 0) из массива
           await this.loadStudentProfile(
             parentData.children[0],
           );
@@ -130,100 +255,215 @@ class UserStore {
         return;
       }
 
+      // 3. Если uid авторизован, но записей в базах данных нет
       toast.error(
         "Документ пользователя не найден в базе данных",
       );
       runInAction(() => {
         this.currentUserProfile = null;
-        this.profile = null;
+        this.clearStudentData();
+        this.profileError =
+          "Документ пользователя не найден в базе данных";
         this.isLoading = false;
       });
     } catch (error) {
+      if (this.user?.uid !== uid) return;
       toast.error("Ошибка при получении профиля");
       console.error("Ошибка при получении профиля:", error);
       runInAction(() => {
+        this.profileError =
+          error instanceof Error
+            ? error.message
+            : "Ошибка при получении профиля";
         this.isLoading = false;
       });
+    } finally {
+      // ОБЯЗАТЕЛЬНЫЙ БЛОК: Выполняется ВСЕГДА, даже при ошибках и return.
+      // Гарантирует избавление от вечной загрузки.
+      if (this.user?.uid === uid)
+        runInAction(() => {
+          this.isLoading = false;
+        });
     }
   }
 
-  private async fetchStudentSubjects(
-    studentUid: string,
-  ): Promise<Record<string, ISubject>> {
-    const subjectsCollRef = collection(
-      db,
-      "users",
-      studentUid,
-      "subjects",
-    );
-    const subjectsSnap = await getDocs(subjectsCollRef);
-    const subjectsMap: Record<string, ISubject> = {};
+  private async fetchStudentSubjects(): Promise<
+    Record<string, ISubject>
+  > {
+    try {
+      // 1. Загружаем глобальный справочник предметов из коллекции "subjects"
+      const subjectsCollRef = collection(db, "subjects");
+      const subjectsSnap = await readFirestore(
+        getDocs(subjectsCollRef),
+      );
 
-    subjectsSnap.forEach((subjectDoc) => {
-      subjectsMap[subjectDoc.id] = {
-        id: subjectDoc.id,
-        ...subjectDoc.data(),
-      } as ISubject;
-    });
+      const subjectsMap: Record<string, ISubject> = {};
 
-    return subjectsMap;
+      subjectsSnap.forEach((subjectDoc) => {
+        subjectsMap[subjectDoc.id] = {
+          ...subjectDoc.data(),
+          id: subjectDoc.id,
+        } as ISubject;
+      });
+
+      // 2. Возвращаем карту предметов { "sub_math": { id: "sub_math", name: "Математика" }, ... }
+      return subjectsMap;
+    } catch (error) {
+      console.error(
+        "Ошибка при получении предметов:",
+        error,
+      );
+      throw error;
+    }
   }
 
   loadStudentProfile = async (studentUid: string) => {
+    const authUid = this.user?.uid;
+    const requestId = ++this.studentRequestId;
+    runInAction(() => {
+      this.isLoading = true;
+      this.profileError = null;
+      this.clearStudentData();
+    });
     try {
+      const [studentDoc, subjects, yearsSnapshot] =
+        await Promise.all([
+          readFirestore(
+            getDoc(doc(db, "students", studentUid)),
+          ),
+          this.fetchStudentSubjects(),
+          readFirestore(
+            getDocs(collection(db, "academic_years")),
+          ),
+        ]);
+      if (!studentDoc.exists())
+        throw new Error("Документ ребенка не найден");
+      const years = yearsSnapshot.docs
+        .map(
+          (item) =>
+            ({
+              ...item.data(),
+              id: item.id,
+            }) as IAcademicYear,
+        )
+        .sort(
+          (a, b) =>
+            b.startDate.toMillis() - a.startDate.toMillis(),
+        );
+      const year =
+        years.find((item) => !item.isCompleted) ?? years[0];
+      const [gradesSnapshot, termsSnapshot] = year
+        ? await Promise.all([
+            readFirestore(
+              getDocs(
+                query(
+                  collection(db, "grades"),
+                  where("studentId", "==", studentUid),
+                  where("yearId", "==", year.id),
+                ),
+              ),
+            ),
+            readFirestore(
+              getDocs(
+                collection(
+                  db,
+                  "academic_years",
+                  year.id,
+                  "terms",
+                ),
+              ),
+            ),
+          ])
+        : [null, null];
+      if (
+        this.user?.uid !== authUid ||
+        requestId !== this.studentRequestId
+      )
+        return;
       runInAction(() => {
-        this.isLoading = true;
+        this.studentProfile = {
+          ...studentDoc.data(),
+          uid: studentDoc.id,
+        } as IStudentProfile;
+        this.currentStudentSubjects = subjects;
+        this.academicYears = years;
+        this.currentYearId = year?.id ?? null;
+        this.currentTerms = (
+          termsSnapshot?.docs.map(
+            (item) =>
+              ({ ...item.data(), id: item.id }) as ITerm,
+          ) ?? []
+        ).sort(
+          (a, b) =>
+            a.startDate.toMillis() - b.startDate.toMillis(),
+        );
+        this.currentGrades = (
+          gradesSnapshot?.docs.map(
+            (item) =>
+              ({ ...item.data(), id: item.id }) as IGrade,
+          ) ?? []
+        ).sort(
+          (a, b) =>
+            a.createdAt.toMillis() -
+              b.createdAt.toMillis() ||
+            a.id.localeCompare(b.id),
+        );
       });
-
-      const studentDocRef = doc(db, "users", studentUid);
-      const studentDocSnap = await getDoc(studentDocRef);
-
-      if (studentDocSnap.exists()) {
-        const studentData =
-          studentDocSnap.data() as IStudentProfile;
-        const subjectsMap =
-          await this.fetchStudentSubjects(studentUid);
-
-        runInAction(() => {
-          this.profile = {
-            ...studentData,
-            subjects: subjectsMap,
-          };
-          this.isLoading = false;
-        });
-      } else {
-        toast.error("Документ ребенка не найден");
-        runInAction(() => {
-          this.isLoading = false;
-        });
-      }
     } catch (error) {
+      if (
+        this.user?.uid !== authUid ||
+        requestId !== this.studentRequestId
+      )
+        return;
+      runInAction(() => {
+        this.profileError =
+          error instanceof Error
+            ? error.message
+            : "Ошибка при загрузке профиля ребенка";
+      });
+      toast.error("Ошибка при загрузке профиля ребенка");
       console.error(
         "Ошибка при загрузке профиля ребенка:",
         error,
       );
-      runInAction(() => {
-        this.isLoading = false;
-      });
+    } finally {
+      if (
+        this.user?.uid === authUid &&
+        requestId === this.studentRequestId
+      )
+        runInAction(() => {
+          this.isLoading = false;
+        });
     }
   };
+
+  get currentAcademicYearName(): string {
+    // Находим объект года в массиве academicYears по текущему ID
+    const activeYear = this.academicYears.find(
+      (year) => year.id === this.currentYearId,
+    );
+
+    // Если нашли — возвращаем его имя, иначе — заглушку
+    return activeYear
+      ? activeYear.name
+      : "Учебный год не выбран";
+  }
 
   private sendTelegramNotification = async (
     chatId: string | string[],
     text: string,
+    bot_token: string,
   ) => {
     const base = "https://api.telegram.org";
-    const BOT_TOKEN = import.meta.env
-      ?.VITE_TELEGRAM_BOT_TOKEN;
 
-    if (!BOT_TOKEN) {
+    if (!bot_token) {
       toast.error(
         "Критическая ошибка: Токен Telegram не найден в .env!",
       );
       return;
     }
 
-    const action = "/bot" + BOT_TOKEN + "/sendMessage";
+    const action = "/bot" + bot_token + "/sendMessage";
     const rawChatIds = Array.isArray(chatId)
       ? chatId
       : [chatId];
@@ -256,242 +496,243 @@ class UserStore {
   addMarkAndSave = async (
     studentUid: string,
     subjectId: string,
-    termKey: "term_1" | "term_2" | "term_3" | "term_4",
-    newMark: number,
-  ) => {
+    termId: string,
+    value: number,
+    comment = "",
+  ): Promise<boolean> => {
+    if (
+      !this.currentYearId ||
+      !this.currentStudentSubjects?.[subjectId] ||
+      !this.currentTerms.some(
+        (term) => term.id === termId,
+      ) ||
+      !Number.isInteger(value) ||
+      value < 1 ||
+      value > 10
+    )
+      return false;
+    const gradeRef = doc(collection(db, "grades"));
+    const grade: IGrade = {
+      id: gradeRef.id,
+      studentId: studentUid,
+      subjectId,
+      yearId: this.currentYearId,
+      termId,
+      value,
+      createdAt: Timestamp.now(),
+      isFinal: false,
+      ...(comment.trim()
+        ? { comment: comment.trim() }
+        : {}),
+    };
+    return this.saveGrade(grade);
+  };
+
+  restoreGrade = async (grade: IGrade): Promise<boolean> =>
+    this.saveGrade(grade);
+
+  // Persist the regular grade and its rounded term average atomically.
+  private async saveGradeWithTermFinal(
+    grade: IGrade,
+    deleted = false,
+  ): Promise<IGrade[]> {
+    const batch = writeBatch(db);
+    const gradeRef = doc(db, "grades", grade.id);
+    if (deleted) batch.delete(gradeRef);
+    else batch.set(gradeRef, grade);
+
+    let nextGrades = this.currentGrades.filter(
+      (item) => item.id !== grade.id,
+    );
+    if (!deleted) nextGrades.push(grade);
+
+    if (!grade.isFinal) {
+      const matchesTerm = (item: IGrade) =>
+        item.studentId === grade.studentId &&
+        item.yearId === grade.yearId &&
+        item.termId === grade.termId &&
+        item.subjectId === grade.subjectId;
+      const termGrades = nextGrades.filter(matchesTerm);
+      const marks = termGrades.filter(
+        (item) => !item.isFinal,
+      );
+      const finals = termGrades.filter(
+        (item) => item.isFinal,
+      );
+      nextGrades = nextGrades.filter(
+        (item) => !matchesTerm(item) || !item.isFinal,
+      );
+      const existingFinal = finals[0];
+      if (marks.length) {
+        const finalRef = existingFinal
+          ? doc(db, "grades", existingFinal.id)
+          : doc(collection(db, "grades"));
+        const finalGrade: IGrade = {
+          id: finalRef.id,
+          studentId: grade.studentId,
+          yearId: grade.yearId,
+          termId: grade.termId,
+          subjectId: grade.subjectId,
+          value: Math.round(
+            marks.reduce(
+              (sum, item) => sum + item.value,
+              0,
+            ) / marks.length,
+          ),
+          createdAt:
+            existingFinal?.createdAt ?? Timestamp.now(),
+          isFinal: true,
+        };
+        batch.set(finalRef, finalGrade);
+        nextGrades.push(finalGrade);
+      }
+      for (const final of finals) {
+        if (!marks.length || final.id !== existingFinal?.id)
+          batch.delete(doc(db, "grades", final.id));
+      }
+    }
+
+    await batch.commit();
+    return nextGrades.sort(
+      (a, b) =>
+        a.createdAt.toMillis() - b.createdAt.toMillis() ||
+        a.id.localeCompare(b.id),
+    );
+  }
+
+  private async saveGrade(grade: IGrade): Promise<boolean> {
     if (
       !this.user ||
-      !this.profile ||
-      !this.profile.subjects ||
-      !this.currentUserProfile
-    ) {
-      toast.error(
-        "Ошибка: Пользователь не авторизован или профиль не загружен.",
-      );
-      return;
-    }
-
+      !this.currentUserProfile ||
+      this.profile?.uid !== grade.studentId ||
+      this.currentYearId !== grade.yearId ||
+      this.isSavingGrade
+    )
+      return false;
+    const student = this.profile;
+    const user = this.currentUserProfile;
+    this.isSavingGrade = true;
     try {
+      const nextGrades =
+        await this.saveGradeWithTermFinal(grade);
       runInAction(() => {
-        this.isLoading = true;
-      });
-
-      const currentSubject =
-        this.profile.subjects[subjectId];
-      const currentTermData = currentSubject?.[termKey] || {
-        marks: [],
-        finalMark: null,
-      };
-      const updatedMarks = [
-        ...currentTermData.marks,
-        newMark,
-      ];
-
-      const sum = updatedMarks.reduce(
-        (acc, val) => acc + val,
-        0,
-      );
-      const calculatedFinalMark = Math.round(
-        sum / updatedMarks.length,
-      );
-
-      const subjectDocRef = doc(
-        db,
-        "users",
-        studentUid,
-        "subjects",
-        subjectId,
-      );
-
-      await updateDoc(subjectDocRef, {
-        [`${termKey}.marks`]: updatedMarks,
-        [`${termKey}.finalMark`]: calculatedFinalMark,
-      });
-
-      try {
-        if (this.profile && this.profile.telegramChatIds) {
-          const termNames = {
-            term_1: "I",
-            term_2: "II",
-            term_3: "III",
-            term_4: "IV",
-          };
-          const now = new Date();
-          const formattedDateTime = now.toLocaleString(
-            "ru-RU",
-            {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            },
-          );
-
-          const subjectName =
-            this.profile.subjects[subjectId]?.name ||
-            subjectId;
-          const authorName = this.currentUserProfile.name;
-
-          const message =
-            `➕ <b>Новая оценка!</b>\n\n` +
-            `📚 Предмет: <b>${subjectName}</b>\n` +
-            `📅 Четверть: <b>${termNames[termKey]}</b>\n` +
-            `💯 Оценка: <b>${newMark}</b>\n\n` +
-            `⏰ <i>Добавлено: ${formattedDateTime}</i>\n` +
-            `👤 Добавил(а): <b>${authorName}</b>\n\n` +
-            `🔄 <b>НОВЫЙ ИТОГ ЗА ЧЕТВЕРТЬ: ${calculatedFinalMark}</b>`;
-
-          await this.sendTelegramNotification(
-            this.profile.telegramChatIds,
-            message,
-          );
+        if (
+          this.profile?.uid === grade.studentId &&
+          this.currentYearId === grade.yearId
+        ) {
+          this.currentGrades = nextGrades;
         }
-      } catch (e) {
-        console.error("Ошибка при вызове уведомления:", e);
-      }
-
-      runInAction(() => {
-        if (this.profile?.subjects?.[subjectId]) {
-          this.profile.subjects[subjectId][termKey] = {
-            marks: updatedMarks,
-            finalMark: calculatedFinalMark,
-          };
-        }
-        this.isLoading = false;
       });
-
-      toast.success(
-        `Оценка ${newMark} успешно добавлена. Новый итог: ${calculatedFinalMark}`,
-        { duration: 3000 },
+      toast.success(`Оценка ${grade.value} сохранена.`);
+      void this.notifyGradeChange(
+        student,
+        user,
+        grade,
+        false,
       );
+      return true;
     } catch (error) {
-      toast.error("Ошибка при сохранении");
-      console.error("Ошибка при сохранении:", error);
+      toast.error("Ошибка при сохранении оценки");
+      console.error(error);
+      return false;
+    } finally {
       runInAction(() => {
-        this.isLoading = false;
+        this.isSavingGrade = false;
       });
     }
-  };
+  }
 
   deleteMarkAndSave = async (
     studentUid: string,
-    subjectId: string,
-    termKey: "term_1" | "term_2" | "term_3" | "term_4",
-    markIndex: number,
-  ) => {
+    gradeId: string,
+  ): Promise<boolean> => {
     if (
       !this.user ||
-      !this.profile ||
-      !this.profile.subjects ||
-      !this.currentUserProfile
-    ) {
-      toast.error(
-        "Ошибка: Пользователь не авторизован или профиль не загружен.",
-      );
-      return;
-    }
-
+      !this.currentUserProfile ||
+      this.profile?.uid !== studentUid ||
+      this.isSavingGrade
+    )
+      return false;
+    const grade = this.currentGrades.find(
+      (item) =>
+        item.id === gradeId &&
+        item.studentId === studentUid &&
+        item.yearId === this.currentYearId &&
+        !item.isFinal,
+    );
+    if (!grade) return false;
+    const student = this.profile;
+    this.isSavingGrade = true;
     try {
-      runInAction(() => {
-        this.isLoading = true;
-      });
-
-      const currentSubject =
-        this.profile.subjects[subjectId];
-      const currentTermData = currentSubject?.[termKey];
-      if (!currentTermData || !currentTermData.marks)
-        return;
-      // Получаем удаляемую оценку перед фильтрацией
-      const deletedMark = currentTermData.marks[markIndex];
-      const updatedMarks = currentTermData.marks.filter(
-        (_, idx) => idx !== markIndex,
+      const nextGrades = await this.saveGradeWithTermFinal(
+        grade,
+        true,
       );
-      let calculatedFinalMark: number | null = null;
-      if (updatedMarks.length > 0) {
-        const sum = updatedMarks.reduce(
-          (acc, val) => acc + val,
-          0,
-        );
-        calculatedFinalMark = Math.round(
-          sum / updatedMarks.length,
-        );
-      }
-      // Ссылка строго на документ предмета ребенка
-      const subjectDocRef = doc(
-        db,
-        "users",
-        studentUid,
-        "subjects",
-        subjectId,
-      );
-      await updateDoc(subjectDocRef, {
-        [`${termKey}.marks`]: updatedMarks,
-        [`${termKey}.finalMark`]: calculatedFinalMark,
-      });
-      // Синхронизируем локальное состояние MobX
       runInAction(() => {
-        if (this.profile?.subjects?.[subjectId]) {
-          this.profile.subjects[subjectId][termKey] = {
-            marks: updatedMarks,
-            finalMark: calculatedFinalMark,
-          };
-        }
-        this.isLoading = false;
+        if (
+          this.profile?.uid === grade.studentId &&
+          this.currentYearId === grade.yearId
+        )
+          this.currentGrades = nextGrades;
       });
-
-      try {
-        if (this.profile && this.profile.telegramChatIds) {
-          const termNames = {
-            term_1: "I",
-            term_2: "II",
-            term_3: "III",
-            term_4: "IV",
-          };
-          const now = new Date();
-          const formattedDateTime = now.toLocaleString(
-            "ru-RU",
-            {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            },
-          );
-          const subjectName =
-            this.profile.subjects[subjectId]?.name ||
-            subjectId;
-          const authorName = this.currentUserProfile.name;
-          const message =
-            `🗑️ <b>Оценка удалена!</b>\n\n` +
-            `📚 Предмет: <b>${subjectName}</b>\n` +
-            `📅 Четверть: <b>${termNames[termKey]}</b>\n` +
-            `❌ Удалена оценка: <b>${deletedMark}</b>\n\n` +
-            `⏰ <i>Время удаления: ${formattedDateTime}</i>\n` +
-            `👤 Удалил(а): <b>${authorName}</b>\n\n` +
-            `🔄 <b>НОВЫЙ ИТОГ ЗА ЧЕТВЕРТЬ: ${calculatedFinalMark}</b>`;
-
-          await this.sendTelegramNotification(
-            this.profile.telegramChatIds,
-            message,
-          );
-        }
-      } catch (e) {
-        console.error(
-          "Ошибка при вызове уведомления (удаление):",
-          e,
-        );
-      }
       toast.success("Оценка успешно удалена.");
+      void this.notifyGradeChange(
+        student,
+        this.currentUserProfile,
+        grade,
+        true,
+      );
+      return true;
     } catch (error) {
       toast.error("Ошибка при удалении оценки");
-      console.error("Ошибка при удалении оценки:", error);
+      console.error(error);
+      return false;
+    } finally {
       runInAction(() => {
-        this.isLoading = false;
+        this.isSavingGrade = false;
       });
     }
   };
+
+  private async notifyGradeChange(
+    student: IStudentProfile,
+    user: IParentProfile | IStudentProfile,
+    grade: IGrade,
+    deleted: boolean,
+  ) {
+    if (
+      !student.telegramChatIds ||
+      (Array.isArray(student.telegramChatIds) &&
+        !student.telegramChatIds.length)
+    )
+      return;
+    const escape = (value: string) =>
+      value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    const subject =
+      this.currentStudentSubjects?.[grade.subjectId]
+        ?.name ?? grade.subjectId;
+    const term =
+      this.currentTerms.find(
+        (item) => item.id === grade.termId,
+      )?.name ?? grade.termId;
+    const now = new Date();
+    const formattedDateTime = now.toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    await this.sendTelegramNotification(
+      student.telegramChatIds,
+      `<b>${deleted ? "Оценка удалена 🗑️" : "Оценка добавлена ➕"}</b>\n👤 ${escape(student.name)}\n📚 ${escape(subject)}\n 📅 ${escape(term)}\n💯 Оценка: ${grade.value} \n\n ⏰ <b>${deleted ? "Удалена:" : "Добавлена:"} ${formattedDateTime} \n${user.name}</b>`,
+      student.BOT_TOKEN,
+    );
+  }
+
   getPrediction(
     currentMarks: number[],
     targetMark: number,
@@ -536,17 +777,22 @@ class UserStore {
     try {
       runInAction(() => {
         this.authError = null;
-        this.isLoading = true;
+        this.isSigningIn = true;
       });
       await signInWithEmailAndPassword(
         auth,
         email,
         password,
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       runInAction(() => {
-        this.isLoading = false;
-        switch (error.code) {
+        switch (
+          error &&
+          typeof error === "object" &&
+          "code" in error
+            ? error.code
+            : null
+        ) {
           case "auth/invalid-email":
             this.authError = "Некорректный формат Email";
             break;
@@ -563,103 +809,21 @@ class UserStore {
             this.authError = "Произошла ошибка при входе";
         }
       });
+    } finally {
+      runInAction(() => {
+        this.isSigningIn = false;
+      });
     }
   };
-  async logout() {
+  async logout(): Promise<boolean> {
     try {
       await auth.signOut();
+      return true;
     } catch (error) {
       console.error("Ошибка при выходе:", error);
+      toast.error("Не удалось выйти из аккаунта");
+      return false;
     }
   }
 }
 export const userStore = new UserStore();
-
-// todo delete code
-// import {
-//   setDoc,
-//   serverTimestamp,
-// } from "firebase/firestore";
-//
-// export const quickCreateUser = async () => {
-//   // 1. Прописываем данные нового пользователя
-//   const userId = "GapDF12345cFCLCUHO8Qlv25C0I2FNWj212345";
-//
-//   const userRef = doc(db, "users", userId);
-//
-//   try {
-//     // 2. Создаем самого пользователя
-//     await setDoc(userRef, {
-//       uid: userId,
-//       name: "User Test",
-//       email: "use_test@mail.com",
-//       class: "10 Б",
-//       role: "ученица",
-//       telegramChatIds: [8128695218],
-//       createdAt: serverTimestamp(),
-//     });
-//
-//     // 3. Сразу же создаем базовые предметы в его подколлекции "subjects"
-//     const defaultSubjects = [
-//       { id: "blrlang", name: "Белорусский язык" },
-//       {
-//         id: "blrlit",
-//         name: "Белорусская литература (Литературное чтение)",
-//       },
-//       { id: "ruslang", name: "Русский язык" },
-//       {
-//         id: "ruslit",
-//         name: "Русская литература (Литературное чтение)",
-//       },
-//       { id: "foreign_lang", name: "Иностранный язык" }, // Обычно английский, немецкий, немецкий или французский
-//
-//       { id: "math", name: "Математика" },
-//
-//       { id: "human_and_world", name: "Человек и мир" },
-//       { id: "may_radzima", name: "Мая Радзіма — Беларусь" }, // Специальный блок в курсе "Человек и мир" для 4 класса
-//
-//       { id: "art", name: "Изобразительное искусство" },
-//       { id: "music", name: "Музыка" },
-//       { id: "labor", name: "Трудовое обучение" },
-//
-//       {
-//         id: "physical_edu",
-//         name: "Физическая культура и здоровье",
-//       },
-//       {
-//         id: "obzh",
-//         name: "Основы безопасности жизнедеятельности (ОБЖ)",
-//       },
-//     ];
-//
-//     // Пустая структура четвертей, чтобы потом просто дополнять массивы
-//     const emptyTerm = {
-//       marks: [],
-//       finalMark: null,
-//     };
-//
-//     for (const subject of defaultSubjects) {
-//       const subjectRef = doc(
-//         db,
-//         "users",
-//         userId,
-//         "subjects",
-//         subject.id,
-//       );
-//
-//       await setDoc(subjectRef, {
-//         name: subject.name,
-//         term_1: emptyTerm,
-//         term_2: emptyTerm,
-//         term_3: emptyTerm,
-//         term_4: emptyTerm,
-//       });
-//     }
-//
-//     toast.success(
-//       "Пользователь и все его предметы успешно созданы в базе данных!",
-//     );
-//   } catch (error: any) {
-//     toast.error("Ошибка при создании:", error);
-//   }
-// };

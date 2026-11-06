@@ -1,24 +1,21 @@
-import { userStore } from "../../store/UserStore.tsx";
+import { useStudentSubjects } from "../../hooks/useStudentSubjects.ts";
 import { Dashboard } from "../../components/organizms/dashboard/Dashboard.tsx";
 import { observer } from "mobx-react-lite";
 import { Text } from "../../components/atoms/text/Text.tsx";
 import s from "./MainScreen.module.css";
 
 export const MainScreen = observer(() => {
-  const { profile } = userStore;
+  const { profile, isEmpty } = useStudentSubjects();
 
   if (!profile) {
     return (
       <Text as={"p"} weight={500} size={"large"}>
-        Пользователь не авторизован
+        Ученик не выбран
       </Text>
     );
   }
 
-  if (
-    !profile.subjects ||
-    Object.keys(profile.subjects).length === 0
-  ) {
+  if (isEmpty) {
     return (
       <Text as={"p"} weight={500} size={"large"}>
         Список предметов пуст

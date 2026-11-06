@@ -120,7 +120,7 @@
 .centerState,
 .errorState {
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
     padding: 40px;
     text-align: center;
@@ -132,7 +132,16 @@
 }
 
 .errorState {
+    width: 100%;
     color: var(--danger, #ef4444);
     background-color: #fef2f2;
     border-color: #fca5a5;
+}
+
+.errorState > button {
+    width: 50%;
+}
+
+.errorState > span {
+    width: 40%;
 }

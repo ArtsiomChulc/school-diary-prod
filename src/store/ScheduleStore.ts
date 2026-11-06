@@ -4,7 +4,7 @@ import {
   type IDaySchedule,
   type ILesson,
   ScheduleService,
-} from "../services/ScheduleService";
+} from "../services/ScheduleService.ts";
 
 // const MOCK_WEEK_SCHEDULE: Record<
 //   Exclude<DayOfWeek, "saturday">,
@@ -20,6 +20,11 @@ import {
 //     { id: "3", name: "Математика", room: "103" },
 //     {
 //       id: "4",
+//       name: "Физическая культура",
+//       room: "Спортзал",
+//     },
+//     {
+//       id: "5",
 //       name: "Белорусская литература",
 //       room: "103",
 //     },
@@ -73,16 +78,32 @@ import {
 //   ],
 // };
 
-class ScheduleStore {
+export class ScheduleStore {
   currentSchedule: IDaySchedule | null = null;
+  classId: string | null = null;
+  dayId: DayOfWeek | null = null;
   isLoading = false;
   error: string | null = null;
+  private requestId = 0;
 
   constructor() {
     makeAutoObservable(this);
   }
 
+  reset() {
+    ++this.requestId;
+    this.currentSchedule = null;
+    this.classId = null;
+    this.dayId = null;
+    this.isLoading = false;
+    this.error = null;
+  }
+
   async fetchSchedule(classId: string, dayId: DayOfWeek) {
+    const requestId = ++this.requestId;
+    this.classId = classId;
+    this.dayId = dayId;
+    this.currentSchedule = null;
     this.isLoading = true;
     this.error = null;
     try {
@@ -90,18 +111,23 @@ class ScheduleStore {
         classId,
         dayId,
       );
+      if (requestId !== this.requestId) return;
       runInAction(() => {
         this.currentSchedule = data ?? { lessons: [] };
       });
-    } catch (err: any) {
+    } catch (error: unknown) {
+      if (requestId !== this.requestId) return;
       runInAction(() => {
         this.error =
-          err.message ?? "Ошибка при загрузке расписания";
+          error instanceof Error
+            ? error.message
+            : "Ошибка при загрузке расписания";
       });
     } finally {
-      runInAction(() => {
-        this.isLoading = false;
-      });
+      if (requestId === this.requestId)
+        runInAction(() => {
+          this.isLoading = false;
+        });
     }
   }
 
@@ -109,29 +135,39 @@ class ScheduleStore {
     classId: string,
     dayId: DayOfWeek,
     lessons: ILesson[],
-  ) {
+  ): Promise<boolean> {
+    const requestId = ++this.requestId;
+    this.classId = classId;
+    this.dayId = dayId;
+    this.currentSchedule = null;
     this.isLoading = true;
     this.error = null;
+    const scheduleData: IDaySchedule = { lessons };
     try {
-      const scheduleData: IDaySchedule = { lessons };
       await ScheduleService.saveDaySchedule(
         classId,
         dayId,
         scheduleData,
       );
-
-      runInAction(() => {
-        this.currentSchedule = scheduleData;
-      });
-    } catch (err: any) {
-      runInAction(() => {
-        this.error =
-          err.message ?? "Ошибка при сохранении расписания";
-      });
+      if (requestId === this.requestId)
+        runInAction(() => {
+          this.currentSchedule = scheduleData;
+        });
+      return true;
+    } catch (error: unknown) {
+      if (requestId === this.requestId)
+        runInAction(() => {
+          this.error =
+            error instanceof Error
+              ? error.message
+              : "Ошибка при сохранении расписания";
+        });
+      return false;
     } finally {
-      runInAction(() => {
-        this.isLoading = false;
-      });
+      if (requestId === this.requestId)
+        runInAction(() => {
+          this.isLoading = false;
+        });
     }
   }
 

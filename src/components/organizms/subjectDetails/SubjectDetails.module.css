@@ -66,8 +66,9 @@
   flex-wrap: wrap;
 }
 
-.markBadge {
+.markBadgeContainer {
   display: flex;
+  flex-direction: column;
   align-items: center;
   background-color: var(--bg);
   color: var(--accent);
@@ -79,7 +80,13 @@
   gap: 6px;
 }
 
-.deleteMarkBtn {
+.markBadge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.deleteMarkBtn, .disabled {
   background: none;
   border: none;
   color: var(--danger);
@@ -121,8 +128,10 @@
 }
 
 .addBtn:disabled {
-  background-color: var(--form-bg);
+  background-color: var(--danger);
   cursor: not-allowed;
+  transform: none;
+  opacity: 0.8;
 }
 
 .digitsGrid {
@@ -146,6 +155,13 @@
 
 .digitBtn:hover {
   background-color: var(--hover-tr);
+}
+
+.digitBtn:disabled {
+  background-color: var(--danger);
+  cursor: not-allowed;
+  transform: none;
+  opacity: 0.8;
 }
 
 .cancelBtn {

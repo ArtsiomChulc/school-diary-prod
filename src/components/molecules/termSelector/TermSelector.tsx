@@ -25,13 +25,15 @@ export const TermSelector = <T extends string | number>({
 }: TermSelectorProps<T>) => (
   <div className={s.tabs}>
     {terms.map(({ key, label }) => (
-      <Button
-        key={key}
-        onClick={() => onSelectTerm(key)}
-        className={`${s.tabBtn} ${selectedTerm === key ? s.tabBtnActive : s.tabBtnInactive}`}
-      >
-        {label}
-      </Button>
+      <>
+        <Button
+          key={key}
+          onClick={() => onSelectTerm(key)}
+          className={`${s.tabBtn} ${selectedTerm === key ? s.tabBtnActive : s.tabBtnInactive}`}
+        >
+          {label}
+        </Button>
+      </>
     ))}
   </div>
 );

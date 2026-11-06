@@ -9,13 +9,13 @@ import { useTermSelection } from "../../hooks/useTermSelection.ts";
 import s from "./GradeCalculator.module.css";
 
 const GradeCalculator: FC = observer(() => {
+  const termSelector = useTermSelection();
+  const { selectedTerm } = termSelector;
   const {
     profile,
     isEmpty,
-    subjects: subjectsList,
-  } = useStudentSubjects();
-  const termSelector = useTermSelection();
-  const { selectedTerm } = termSelector;
+    subjectMarks: subjectsList,
+  } = useStudentSubjects(selectedTerm);
 
   const [targets, setTargets] = useState<
     Record<string, number>
@@ -58,14 +58,16 @@ const GradeCalculator: FC = observer(() => {
 
       <div className={s.grid}>
         {subjectsList.map((subject) => {
-          const currentMarks =
-            subject[selectedTerm]?.marks || [];
-          const currentTarget = targets[subject.id] || 9;
+          const currentMarks = subject.currentMarks.map(
+            (grade) => grade.value,
+          );
+          const currentTarget =
+            targets[subject.subjectId] || 9;
 
           return (
-            <div key={subject.id} className={s.card}>
+            <div key={subject.subjectId} className={s.card}>
               <Text as={"h3"} className={s.subjectName}>
-                {subject.name}
+                {subject.subjectName}
               </Text>
 
               <div className={s.row}>
@@ -78,15 +80,17 @@ const GradeCalculator: FC = observer(() => {
               </div>
 
               <div className={s.inputRow}>
-                <label htmlFor={`select-${subject.id}`}>
+                <label
+                  htmlFor={`select-${subject.subjectId}`}
+                >
                   Хочу получить:
                 </label>
                 <select
-                  id={`select-${subject.id}`}
+                  id={`select-${subject.subjectId}`}
                   value={currentTarget}
                   onChange={(e) =>
                     handleTargetChange(
-                      subject.id,
+                      subject.subjectId,
                       Number(e.target.value),
                     )
                   }

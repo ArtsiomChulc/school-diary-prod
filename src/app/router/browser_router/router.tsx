@@ -8,6 +8,7 @@ import { SubjectDetails } from "../../../components/organizms/subjectDetails/Sub
 import { Statistics } from "../../../screens/statistics/Statistics.tsx";
 import { PATHS } from "../PATHS.ts";
 import Schedule from "../../../screens/schedule/Schedule.tsx";
+import NotFound from "../../../screens/notFound/NotFound.tsx";
 
 export const router = createBrowserRouter([
   {
@@ -19,7 +20,7 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <ProtectedRoute />,
-    errorElement: <div>not found</div>,
+    errorElement: <NotFound />,
     children: [
       {
         element: <Layout />,

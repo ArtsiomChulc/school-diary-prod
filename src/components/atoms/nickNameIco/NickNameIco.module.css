@@ -1,6 +1,6 @@
 .nick_name_wrap {
   width: 210px;
-  border: 1px solid #ded2c3;
+  border: 1px solid var(--accent-border);
   border-radius: 12px;
   padding: 8px;
   display: flex;

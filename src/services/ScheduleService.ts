@@ -1,3 +1,4 @@
+import { firestoreRequest } from "../utils/firestoreRequest.ts";
 import { db } from "../../firebase.ts";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 
@@ -46,7 +47,7 @@ export class ScheduleService {
       "days",
       dayId,
     );
-    const docSnap = await getDoc(docRef);
+    const docSnap = await firestoreRequest(getDoc(docRef));
 
     if (docSnap.exists()) {
       return docSnap.data() as IDaySchedule;

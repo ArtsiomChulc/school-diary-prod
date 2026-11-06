@@ -144,7 +144,7 @@ export const SubjectDetails: FC = observer(() => {
                       <TrashIcon size={18} />
                     </Button>
                   </div>
-                  <Text as={"span"} size={"xxs"}>
+                  <Text as={"span"} size={"xsl"}>
                     {formatted}
                   </Text>
                 </div>

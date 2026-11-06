@@ -23,6 +23,7 @@ export type TextProps = {
   size?:
     | "xxs"
     | "xs"
+    | "xsl"
     | "sm"
     | "md"
     | "lg"
@@ -58,6 +59,7 @@ const sizeToClass: Record<
   string
 > = {
   xxs: s.xxs,
+  xsl: s.xsl,
   xs: s.xs,
   sm: s.sm,
   md: s.md,

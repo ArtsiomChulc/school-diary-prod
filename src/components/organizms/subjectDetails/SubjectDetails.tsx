@@ -118,6 +118,19 @@ export const SubjectDetails: FC = observer(() => {
       <div className={s.detailsCard}>
         <Text as={"h3"} color={"var(--text-main)"}>
           Текущие оценки:
+          {termSelector.isSelectionCompleted && (
+            <Text
+              as={"span"}
+              size={"xl"}
+              color={"var(--text-secondary)"}
+              style={{
+                display: 'block',
+                padding: '10px'
+              }}
+            >
+              четверть закончена
+            </Text>
+          )}
         </Text>
         <div className={s.marksContainer}>
           {currentTermData?.currentMarks &&

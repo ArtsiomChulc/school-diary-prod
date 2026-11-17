@@ -87,6 +87,7 @@
 
 .sidebar_open {
     transform: translateX(0);
+    overflow: auto;
 }
 
 .overlay {

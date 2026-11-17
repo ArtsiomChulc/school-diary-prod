@@ -12,7 +12,6 @@ import { Text } from "../../atoms/text/Text.tsx";
 import { Button } from "../../atoms/button/Button.tsx";
 import { useNavigate, useParams } from "react-router";
 import s from "./SubjectDetails.module.css";
-import { PATHS } from "../../../app/router/PATHS.ts";
 
 export const SubjectDetails: FC = observer(() => {
   const navigate = useNavigate();
@@ -83,14 +82,14 @@ export const SubjectDetails: FC = observer(() => {
   return (
     <div className={s.container}>
       <Button
-        onClick={() => navigate(`${PATHS.subjects}`)}
+        onClick={() => navigate(-1)}
         className={s.backBtn}
       >
         <ArrowLeftIcon
           size={16}
           style={{ marginRight: "6px" }}
         />
-        Назад в дневник
+        Назад
       </Button>
 
       <Text
@@ -124,8 +123,8 @@ export const SubjectDetails: FC = observer(() => {
               size={"xl"}
               color={"var(--text-secondary)"}
               style={{
-                display: 'block',
-                padding: '10px'
+                display: "block",
+                padding: "10px",
               }}
             >
               четверть закончена

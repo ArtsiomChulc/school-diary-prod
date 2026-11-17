@@ -50,8 +50,9 @@
     padding: 16px;
     background-color: var(--bg-card, #fff);
     color: var(--text-main, #333);
-    border: 1px solid var(--border-color, #e1e4e8);
+    border: 2px solid var(--border-color, #e1e4e8);
     border-radius: 10px;
+    box-shadow: 1px 0 40px 1px var(--shadow);
 }
 
 .distributionList {

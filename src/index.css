@@ -46,9 +46,7 @@
   --hover-tr: #ebe3d9;
   --social-bg: rgb(240 235 228 / 0.5);
 
-  --shadow:
-          rgba(28, 20, 18, 0.1) 0 10px 15px -3px,
-          rgba(28, 20, 18, 0.05) 0 4px 6px -2px;
+  --shadow: rgba(0,0,0,0.2);
 
   --sans: system-ui, "Segoe UI", Roboto, sans-serif;
   --heading: system-ui, "Segoe UI", Roboto, sans-serif;
@@ -114,9 +112,7 @@
   --hover-tr: #382a23;
   --social-bg: rgb(36 27 23 / 0.5);
 
-  --shadow:
-          rgba(0, 0, 0, 0.5) 0 10px 15px -3px,
-          rgba(0, 0, 0, 0.3) 0 4px 6px -2px;
+  --shadow: rgba(237,241,241,0.3);
 
   color-scheme: dark;
 }

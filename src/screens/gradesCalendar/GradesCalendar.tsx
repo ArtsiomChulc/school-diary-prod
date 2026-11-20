@@ -4,6 +4,7 @@ import { gradesStore } from "../../store/GradesStore.ts";
 import { userStore } from "../../store/UserStore.tsx";
 import { Text } from "../../components/atoms/text/Text.tsx";
 import { ErrorFallback } from "../../components/organizms/errorFallback/ErrorFallback.tsx";
+import { ArrowBigLeft, ArrowBigRight } from "lucide-react";
 import s from "./GradesCalendar.module.css";
 
 const WEEK_DAYS = [
@@ -59,17 +60,28 @@ export const GradesCalendar: FC = observer(() => {
       {/* Сетка календаря */}
       <div className={s.calendarGrid}>
         <div className={s.actions}>
-          <button onClick={handlePrevMonth}>←</button>
+          <button
+            className={s.monthBtn}
+            onClick={handlePrevMonth}
+          >
+            <ArrowBigLeft size={30}/>
+          </button>
           <Text
             as={"strong"}
             style={{ textTransform: "capitalize" }}
+            size={'lg'}
           >
             {viewDate.toLocaleDateString("ru-RU", {
               month: "long",
               year: "numeric",
             })}
           </Text>
-          <button onClick={handleNextMonth}>→</button>
+          <button
+            className={s.monthBtn}
+            onClick={handleNextMonth}
+          >
+            <ArrowBigRight size={30} />
+          </button>
         </div>
 
         <div className={s.weekDays}>
@@ -78,7 +90,7 @@ export const GradesCalendar: FC = observer(() => {
           ))}
         </div>
 
-        <div className={s.empty}>
+        <div className={s.dayNumberContainer}>
           {Array.from({ length: firstDayIndex }).map(
             (_, i) => (
               <div key={`empty-${i}`} />
@@ -127,6 +139,9 @@ export const GradesCalendar: FC = observer(() => {
 
       {/* Список оценок за выбранный день */}
       <div className={s.gradesListContainer}>
+        <Text as={"p"} size={"lg"} className={s.dayNow}>
+          Сегодня <Text as={"span"}>{dateNow()}</Text>
+        </Text>
         {!gradesStore.selectedDate ? (
           <Text as={"p"} style={{ color: "#666" }}>
             Выберите день в календаре, чтобы посмотреть
@@ -134,9 +149,6 @@ export const GradesCalendar: FC = observer(() => {
           </Text>
         ) : (
           <>
-            <Text as={"p"} size={"lg"} className={s.dayNow}>
-              Сегодня <Text as={"span"}>{dateNow()}</Text>
-            </Text>
             {isLoading ? (
               ""
             ) : (

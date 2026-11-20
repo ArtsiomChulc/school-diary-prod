@@ -9,6 +9,7 @@ import { Statistics } from "../../../screens/statistics/Statistics.tsx";
 import { PATHS } from "../PATHS.ts";
 import Schedule from "../../../screens/schedule/Schedule.tsx";
 import NotFound from "../../../screens/notFound/NotFound.tsx";
+import { GradesCalendar } from "../../../screens/gradesCalendar/GradesCalendar.tsx";
 
 export const router = createBrowserRouter([
   {
@@ -44,6 +45,10 @@ export const router = createBrowserRouter([
           {
             path: PATHS.schedule,
             element: <Schedule />,
+          },
+          {
+            path: PATHS.calendar,
+            element: <GradesCalendar />,
           },
         ],
       },

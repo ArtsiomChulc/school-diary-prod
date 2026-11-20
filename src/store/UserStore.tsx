@@ -531,7 +531,7 @@ export class UserStore {
   restoreGrade = async (grade: IGrade): Promise<boolean> =>
     this.saveGrade(grade);
 
-  // Persist the regular grade and its rounded term average atomically.
+  // Сохраняйте обычную оценку и её округлённый средний показатель за семестр атомарно.
   private async saveGradeWithTermFinal(
     grade: IGrade,
     deleted = false,

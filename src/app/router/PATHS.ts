@@ -3,4 +3,5 @@ export const PATHS = {
   subjects: "/subjects",
   calculator: "/calculator",
   schedule: "/schedule",
+  calendar: "/calendar",
 };

@@ -3,11 +3,12 @@ import { Button } from "../../atoms/button/Button.tsx";
 import { Text } from "../../atoms/text/Text.tsx";
 import {
   BookAIcon,
+  BookmarkCheck,
   Calculator,
+  Calendar,
   HomeIcon,
   OutdentIcon,
   SunMoon,
-  BookmarkCheck,
 } from "lucide-react";
 import { NickNameIco } from "../../atoms/nickNameIco/NickNameIco.tsx";
 import useTheme from "../../../hooks/useTheme.ts";
@@ -31,7 +32,7 @@ export const Header: FC<Props> = observer(
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-    const mobile = width <= 1028;
+    const mobile = width <= 1120;
 
     const toggleMenu = () => setIsMenuOpen((prev) => !prev);
     const closeMenu = () => setIsMenuOpen(false);
@@ -72,6 +73,14 @@ export const Header: FC<Props> = observer(
               }
             >
               <Text as="span">Расписание</Text>
+            </NavLink>
+            <NavLink
+              to={PATHS.calendar}
+              className={({ isActive }) =>
+                `${s.header_btn} ${isActive ? s.active : ""}`
+              }
+            >
+              <Text as="span">Календарь</Text>
             </NavLink>
             <Button
               onClick={toggleTheme}
@@ -206,6 +215,16 @@ export const Header: FC<Props> = observer(
                 >
                   <BookmarkCheck size={22} />
                   <Text as="span">Расписание</Text>
+                </NavLink>
+                <NavLink
+                  to={PATHS.calendar}
+                  onClick={closeMenu}
+                  className={({ isActive }) =>
+                    `${s.sidebar_link} ${isActive ? s.sidebar_link_active : ""}`
+                  }
+                >
+                  <Calendar size={22} />
+                  <Text as="span">Календарь</Text>
                 </NavLink>
               </nav>
 

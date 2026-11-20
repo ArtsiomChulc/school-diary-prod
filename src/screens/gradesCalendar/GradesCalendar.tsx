@@ -64,12 +64,15 @@ export const GradesCalendar: FC = observer(() => {
             className={s.monthBtn}
             onClick={handlePrevMonth}
           >
-            <ArrowBigLeft size={30}/>
+            <ArrowBigLeft
+              size={30}
+              color={"var(--text-secondary)"}
+            />
           </button>
           <Text
             as={"strong"}
             style={{ textTransform: "capitalize" }}
-            size={'lg'}
+            size={"lg"}
           >
             {viewDate.toLocaleDateString("ru-RU", {
               month: "long",
@@ -80,7 +83,10 @@ export const GradesCalendar: FC = observer(() => {
             className={s.monthBtn}
             onClick={handleNextMonth}
           >
-            <ArrowBigRight size={30} />
+            <ArrowBigRight
+              size={30}
+              color={"var(--text-secondary)"}
+            />
           </button>
         </div>
 
